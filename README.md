@@ -20,16 +20,31 @@ A lightweight vector search tool for your chat history on claude.ai! Built for H
 
 #### Agent-driven queries
 
-A major challenge for infintie-context agents is being able to retrieve context with more abstract relevance to the user message that semantic and keyword matching might miss. [Human-like Episodic Memory for Infinite Context LLMs](https://arxiv.org/abs/2407.09450) introduces EM-LLM, a novel approach that attempts to replicate human memory to solve this problem. EM-LLM organises and stores sequences of tokens into coherent episodic events based on suprise boundaries, and combines similarity-based and temporally contiguous retrieval for efficient and human-like retrieval.
+A major challenge for infintie-context agents is being able to retrieve context with more abstract relevance to the user message that semantic and keyword matching might miss. [Human-like Episodic Memory for Infinite Context LLMs](https://arxiv.org/abs/2407.09450) introduces EM-LLM, a novel approach that attempts to replicate human memory to solve this problem. EM-LLM organises and stores sequences of tokens into coherent episodic events based on suprise boundaries, and combines similarity-based and temporally contiguous retrieval for efficient and human-like retrieval. 
 
 #### Building and effective Vector DB
 
 The Vector DB is optimised for smaller scale and is run on-device. There is 1 DB per user. A typical claude.ai user might have 2500 conversations / 15000 messages.
-For the user search interface, we expect queries about specific entities (e.g. 'Email to Lucas Vannevar') and queries intending to find a specific chat session, thus a hyrbid sparse (keyword) and semantic (dense) approach is preffered. 
 
-This will work with the epsiodic chunking approach preffered for Agent generated queries and will require an inverted index, a dense vector DB, and a fusion function for determining the most relevant results. 
+For the user search interface, we expect the following query types:
 
-During indexing we can either approach the chat histroy as a series of episdoes as outlines above or structued arround conversations. 
+- Specific entity / knowledge retrieval (keyword)
+    - `"react useEffect"` - Fragmented (No one searches in phrases)
+    - `"CRISPR ethics"` - Often Domain Specific and targeting every sessioj about an entity
+    - `"Retrieval Ranking Phase Vespa LLM use"` - Multiple assosciative fragments (often appended to main query)
+- Half-remembered information / paraphrasing (semantic)
+    - `"vacation spots europe"` - People often remember they discussed something and want all information
+    - `"TikTok Hook for fitness client marketing"` - Using synonyms or related terminology / Describing the concept rather than using technical terms
+- Recovery based on vague details (semantic, similar to above)
+- Knowledge Assembly from multiple sessions
+    - `"Material for Harvard Applciaiton"` - Semantic searching needed, user goes on to open mutliple sessions
+- Response structure as context
+    - `"That explanation of Apple types in the UK"`
+    - `"Debug for AWS deployment error"`
+
+
+To cover all of these, a hyrbid sparse (keyword) and semantic (dense) approach is preffered. This requires an inverted index, a dense vector DB, and a fusion function for determining the most relevant results. During indexing we can either approach the chat histroy as a series of episdoes as outlines above or structued arround conversations (or both).
+
 Embedding and Ranking models have to be small as they are again loaded and used on-device.
 
 ## Areas to explore:

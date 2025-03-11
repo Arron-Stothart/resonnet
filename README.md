@@ -1,3 +1,5 @@
-Claude.ai provides keyword search of conversation titles
+### Export process for `conversations.json`
 
-ReSonnet is a lightweight Chroma DB + Semantic Search for your entire conversation histroy
+
+![Group 4](https://github.com/user-attachments/assets/dc136e0c-d80f-467d-88c9-44734effb365)
+

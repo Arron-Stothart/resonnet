@@ -4,6 +4,10 @@ A lightweight vector search tool for your chat history on claude.ai! Built for H
 - Creates a searchable memory of all past interactions
 - Transforms `claude-3-7-sonnet` into a true infinite-turn companion via function calling
 
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/8a255ca4-f00a-4c7c-8eb1-51905279fc28" width="400">
+</div>
+
 > ReSonnet also offers a human-friendly search interface. \
 > Claude.ai currently limits search to keyword matching on conversation title.
 

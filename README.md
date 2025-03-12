@@ -1,16 +1,14 @@
-# `ReSonnet`
+# ReSonnet
 
-A lightweight vector search tool for your chat history on claude.ai! Built for Humans and Agents alike.
-- Creates a searchable memory of all past interactions
-- Transforms `claude-3-7-sonnet` into a true infinite-turn companion via function calling
+> Claude.ai's built-in search only supports keyword matching on conversation titles with no ability to search message content.
 
-<div align="center">
-    <img src="https://github.com/user-attachments/assets/8a255ca4-f00a-4c7c-8eb1-51905279fc28" width="400">
-</div>
+ReSonnet is a lightweight vector search that creates a searchable memory of all your past interactions on Claude.ai. It provides a human-friendly search interface as well as function calling capabilities, effectively transforming `claude-3-7-sonnet` into an infinite-turn companion by enabling contextual retrieval of previous conversations.
 
-> ReSonnet also offers a human-friendly search interface. \
-> Claude.ai currently limits search to keyword matching on conversation title.
-
+## Get Sarted
+1. **Export**: Export `conversations.json` from Claude.ai
+    ![export](https://github.com/user-attachments/assets/e0ccd6d1-b3ff-4f3e-95db-a0f6be3b11ae)
+2. **Index**: Process and embed all conversations
+3. **Search**: During conversations, Claude can query this database to recall relevant context
 
 ## Why is Searching Chat History Challenging?
 
@@ -68,10 +66,3 @@ Embedding and Ranking models have to be small as they are again loaded and used 
 - Knowledge Graph of Conversations and Tiered Retrieval Strategy
 - [CogGRAG](https://arxiv.org/abs/2503.06567)
 
-
-## Installing / Usage
-
-1. **Export**: Export `conversations.json` from Claude.ai
-    ![export](https://github.com/user-attachments/assets/e0ccd6d1-b3ff-4f3e-95db-a0f6be3b11ae)
-2. **Index**: Process and embed all conversations
-3. **Search**: During conversations, Claude can query this database to recall relevant context

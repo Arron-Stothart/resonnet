@@ -60,7 +60,9 @@ Embedding and Ranking models have to be small as they are again loaded and used 
 - [Semantic Retrieval at Walmart](https://arxiv.org/abs/2412.04637)
 - Splade for keyword matching
 - Why Anthropic hasn't released their own search
-- Conversation drive search - conversation level embedding that is queried first 
+- Conversation level embedding that is queried first 
+- Knowledge Graph of Conversations and Tiered Retrieval Strategy
+- [CogGRAG](https://arxiv.org/abs/2503.06567)
 
 
 ## Installing / Usage

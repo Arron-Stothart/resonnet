@@ -2,21 +2,21 @@
 
 A lightweight vector search tool for your chat history on claude.ai! Built for Humans and Agents alike.
 - Creates a searchable memory of all past interactions
-- Allows `claude-3-7-sonnet` to retrieve all messages relevant to the current conversation, transforming Claude into a true **infinite-turn companion**.
+- Transforms `claude-3-7-sonnet` into a true infinite-turn companion via function calling
 
-> ReSonnet additionally offers a human-friendly search interface. \
-> Claude.ai current limits search to keyword matching on conversation title.
+> ReSonnet also offers a human-friendly search interface. \
+> Claude.ai currently limits search to keyword matching on conversation title.
 
 
-## Why is Chat History Search Challenging?
+## Why is Searching Chat History Challenging?
 
 - Many chats with Claude are throw-away conversations that create noise in retrieval
+- Claude generates a LOT of text with extensive explanations and pleasantries
 - Conversations often contain debugging/iterative attempts that aren't meaningful long-term
-- Claude generates a LOT of text with extensive explanations, boilerplate text and pleasantries
-- To create an effective infinite-memory companion, retrieval must mirror human memory patterns (Recency, conceptual linking, ...)
 - Users often write unclear or context-dependent prompts leading to undesired assistant messages
 - Assistant messages tend to be 50x longer than user messages
-- Follow-up questions rely heavily on conversation context that may not be captured well in embeddings
+- Follow-up questions rely heavily on conversation context that are difficult to capture well in embeddings
+- To create an effective infinite-memory companion, retrieval must mirror human memory patterns (Recency, conceptual linking, ...)
 
 #### Agent-driven queries
 
@@ -26,21 +26,27 @@ A major challenge for infintie-context agents is being able to retrieve context 
 
 The Vector DB is optimised for smaller scale and is run on-device. There is 1 DB per user. A typical claude.ai user might have 2500 conversations / 15000 messages.
 
-For the user search interface, we expect the following query types:
+For the user (human) search interface, we expect the following query types:
 
 - Specific entity / knowledge retrieval (keyword)
-    - `"react useEffect"` - Fragmented (No one searches in phrases)
-    - `"CRISPR ethics"` - Often Domain Specific and targeting every sessioj about an entity
-    - `"Retrieval Ranking Phase Vespa LLM use"` - Multiple assosciative fragments (often appended to main query)
-- Half-remembered information / paraphrasing (semantic)
-    - `"vacation spots europe"` - People often remember they discussed something and want all information
-    - `"TikTok Hook for fitness client marketing"` - Using synonyms or related terminology / Describing the concept rather than using technical terms
-- Recovery based on vague details (semantic, similar to above)
-- Knowledge Assembly from multiple sessions
-    - `"Material for Harvard Applciaiton"` - Semantic searching needed, user goes on to open mutliple sessions
-- Response structure as context
-    - `"That explanation of Apple types in the UK"`
-    - `"Debug for AWS deployment error"`
+    - `"react useEffect"` \
+Fragmented as no one searches in phrases.
+    - `"CRISPR ethics"` \
+Often Domain Specific. The user may be target several sessions with this entity for some task.
+    - `"Retrieval Ranking Phase Vespa LLM use"` \
+Multiple assosciative fragments (often appended to main query)
+- Half-remembered information / paraphrasing(semantic)
+    - `"vacation spots europe"` \
+People often remember they discussed something and want to recover the chat session.
+    - `"TikTok Hook for fitness client marketing"` \
+Using synonyms or related terminology / Describing the concept rather than using exact terms.
+- Queries tageting multiple sessions the searcher uses for knowledge assembly
+    - `"Material for Harvard Applciaiton"`
+- Referencing Time, unique element of Chat UI, or other inferred context
+    - `"Long explainer of Apple types in the UK"` \
+Refers to session where a detailed artefact report was generated.
+    - `"Debug for AWS deployment error"` \
+This user wants to find the code block this was finally resolved in. The code block may be an incremental change with the entireity of the fix only known if combined with the original file. The correct assistant answer may not have any positive feedback: has the user closed the session because they've gotten what they needed, or have they given up?
 
 
 To cover all of these, a hyrbid sparse (keyword) and semantic (dense) approach is preffered. This requires an inverted index, a dense vector DB, and a fusion function for determining the most relevant results. During indexing we can either approach the chat histroy as a series of episdoes as outlines above or structued arround conversations (or both).

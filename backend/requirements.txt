@@ -6,3 +6,4 @@ sentence-transformers==3.4.1
 huggingface-hub==0.16.4
 tqdm==4.66.1
 pydantic==2.4.2
+spacy==3.8.4

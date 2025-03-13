@@ -7,38 +7,21 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 import re
 import hashlib
-import spacy
-from datetime import datetime
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    spacy.cli.download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
 
 DATA_DIR = "data"
 CHROMA_DIR = os.path.join(DATA_DIR, "chroma_db")
 CHECKPOINT_DIR = os.path.join(DATA_DIR, "checkpoints")
 COLLECTION_NAME = "claude_conversations"
-TARGET_CHUNK_SIZE = 256  
 DENSE_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
-# Markers that indicate topic transitions
-TRANSITION_MARKERS = [
-    r"^#+\s+.+$",
-    r"^\d+\.\s+.+$",
-    
-    r"\b(additionally|furthermore|moreover|besides|also|next|then|subsequently)\b",
-    r"\b(on another note|regarding|as for|speaking of|turning to|moving on to)\b",
-    r"\b(let's discuss|let's talk about|let's move on to|let's consider)\b",
-    
-    r"\b(in summary|to summarize|to conclude|in conclusion|finally|lastly|to wrap up)\b",
-    r"\b(overall|all in all|in the end|ultimately|to sum up)\b"
-]
+_model_singleton = None
 
-TRANSITION_PATTERNS = [re.compile(pattern, re.IGNORECASE) for pattern in TRANSITION_MARKERS]
+def get_model():
+    """Get or create the sentence transformer model singleton."""
+    global _model_singleton
+    if _model_singleton is None:
+        _model_singleton = SentenceTransformer(DENSE_EMBEDDING_MODEL)
+    return _model_singleton
 
 def setup_directories():
     """Create necessary directories for data storage."""
@@ -68,9 +51,7 @@ def get_or_create_collection(client: chromadb.PersistentClient) -> chromadb.Coll
     return collection
 
 def clean_text(text: str) -> str:
-    """Clean message text by removing code blocks and markdown formatting.
-    TODO: Replace
-    """
+    """Clean message text by removing code blocks and markdown formatting."""
     text = re.sub(r'```[\s\S]*?```', '[CODE BLOCK]', text)
     
     text = re.sub(r'#{1,6}\s+', '', text)
@@ -81,7 +62,7 @@ def clean_text(text: str) -> str:
     
     text = re.sub(r'\s+', ' ', text).strip()
     
-    if len(text) < 10:
+    if len(text) < 10: 
         return ""
         
     if not re.search(r'[a-zA-Z]{2,}.*[a-zA-Z]{2,}', text):
@@ -139,421 +120,116 @@ def load_conversations(file_path: str) -> List[Dict[str, Any]]:
         print(f"Error loading conversations: {e}")
         return []
 
-def estimate_token_count(text: str) -> int:
-    """Estimate the number of tokens in a text string.
-    TODO: Replace
-    """
-    return len(text) // 4
-
-def split_into_paragraphs(text: str) -> List[str]:
-    """Split text into paragraphs based on double newlines."""
-    paragraphs = re.split(r'\n\s*\n', text)
-    return [p.strip() for p in paragraphs if p.strip()]
-
-def split_into_sentences(text: str) -> List[str]:
-    """Split text into sentences using spaCy."""
-    doc = nlp(text)
-    return [sent.text for sent in doc.sents]
-
-def has_discourse_marker(sentence: str) -> bool:
-    """Check if a sentence contains a discourse marker indicating topic transition."""
-    for pattern in TRANSITION_PATTERNS:
-        if pattern.search(sentence):
-            return True
-    return False
-
-def get_sentence_embeddings(sentences: List[str], model: SentenceTransformer) -> np.ndarray:
-    """Generate embeddings for a list of sentences."""
-    return model.encode(sentences)
-
-def calculate_semantic_shifts(embeddings: np.ndarray) -> List[float]:
-    """Calculate semantic shifts between adjacent sentences based on cosine similarity."""
-    if len(embeddings) <= 1:
-        return []
-    
-    similarities = []
-    for i in range(len(embeddings) - 1):
-        sim = cosine_similarity([embeddings[i]], [embeddings[i + 1]])[0][0]
-        similarities.append(1.0 - sim) 
-    
-    return similarities
-
-def detect_topic_boundaries(text: str, min_segment_tokens: int = 50, 
-                           similarity_threshold: float = 0.25) -> List[int]:
-    """
-    Detect topic boundaries in text using a hybrid approach:
-    1. Sentence-level embedding analysis
-    2. Discourse marker detection
-    3. Paragraph structure analysis
-    
-    Returns a list of sentence indices where boundaries occur.
-    """
-    model = SentenceTransformer(DENSE_EMBEDDING_MODEL)
-    
-    sentences = split_into_sentences(text)
-    paragraphs = split_into_paragraphs(text)
-    
-    if len(sentences) <= 1:
-        return []
-    
-    # 1. Sentence-Level Embedding Analysis
-    embeddings = get_sentence_embeddings(sentences, model)
-    semantic_shifts = calculate_semantic_shifts(embeddings)
-    
-    mean_shift = np.mean(semantic_shifts)
-    std_shift = np.std(semantic_shifts)
-    dynamic_threshold = min(similarity_threshold, mean_shift + std_shift)
-    
-    potential_boundaries = []
-    for i, shift in enumerate(semantic_shifts):
-        if shift > dynamic_threshold:
-            potential_boundaries.append(i + 1)
-    
-    # 2. Discourse Marker Detection
-    discourse_boundaries = []
-    for i, sentence in enumerate(sentences):
-        if i > 0 and has_discourse_marker(sentence):
-            discourse_boundaries.append(i)
-    
-    # 3. Paragraph Structure Analysis
-    paragraph_boundaries = []
-    sentence_to_paragraph = {}
-    
-    current_para = 0
-    sentence_count = 0
-    
-    for i, sentence in enumerate(sentences):
-        sentence_to_paragraph[i] = current_para
-        sentence_count += 1
+def chunk_text(text: str, chunk_size: int = 512, overlap: int = 50) -> List[str]:
+    """Split text into overlapping chunks."""
+    if len(text) <= chunk_size:
+        return [text]
         
-        current_text = " ".join(sentences[:i+1])
-        if current_para < len(paragraphs) and current_text.endswith(paragraphs[current_para]):
-            current_para += 1
-            paragraph_boundaries.append(i + 1)
-    
-    # 4. Boundary Verification & Refinement
-    boundary_scores = {i: 0.0 for i in range(1, len(sentences))}
-    
-    for i in range(1, len(sentences)):
-        if i in potential_boundaries:
-            boundary_scores[i] += 1.0
-        if i > 0:
-            boundary_scores[i] += semantic_shifts[i-1] / max(dynamic_threshold, 0.01)
-    
-    for i in discourse_boundaries:
-        boundary_scores[i] += 1.5
-    
-    for i in paragraph_boundaries:
-        if i < len(sentences):
-            boundary_scores[i] += 1.0
-    
-    final_boundaries = []
-    last_boundary = 0
-    
-    sorted_boundaries = sorted([(score, idx) for idx, score in boundary_scores.items()], 
-                              reverse=True)
-    
-    for score, idx in sorted_boundaries:
-        if score >= 1.0:
-            valid = True
-            
-            for b in final_boundaries:
-                if abs(idx - b) < min_segment_tokens // 10:
-                    valid = False
-                    break
-            
-            if valid:
-                final_boundaries.append(idx)
-    
-    final_boundaries.sort()
-    
-    filtered_boundaries = []
-    last_boundary = 0
-    
-    for boundary in final_boundaries:
-        segment_size = estimate_token_count(" ".join(sentences[last_boundary:boundary]))
-        if segment_size >= min_segment_tokens:
-            filtered_boundaries.append(boundary)
-            last_boundary = boundary
-    
-    return filtered_boundaries
-
-def chunk_ai_response_with_topic_detection(ai_text: str) -> List[str]:
-    """
-    Split AI response into semantic chunks using topic boundary detection.
-    """
-    if estimate_token_count(ai_text) <= TARGET_CHUNK_SIZE:
-        return [ai_text]
-    
-    paragraphs = split_into_paragraphs(ai_text)
-    
-    if len(paragraphs) > 1 and all(estimate_token_count(p) < TARGET_CHUNK_SIZE for p in paragraphs):
-        return paragraphs
-    
-    sentences = split_into_sentences(ai_text)
-    
-    if len(sentences) <= 1:
-        return [ai_text]
-    
-    boundaries = detect_topic_boundaries(ai_text, min_segment_tokens=TARGET_CHUNK_SIZE // 2)
-    
-    if not boundaries:
-        chunks = []
-        current_chunk = []
-        current_token_count = 0
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
         
-        for sentence in sentences:
-            sentence_tokens = estimate_token_count(sentence)
-            
-            if current_token_count + sentence_tokens > TARGET_CHUNK_SIZE and current_chunk:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = [sentence]
-                current_token_count = sentence_tokens
+        if end < len(text):
+            last_sentence = max(text.rfind('.', start, end),
+                              text.rfind('!', start, end),
+                              text.rfind('?', start, end))
+            if last_sentence > start + chunk_size - 100:
+                end = last_sentence + 1
             else:
-                current_chunk.append(sentence)
-                current_token_count += sentence_tokens
+                last_space = text.rfind(' ', start, end)
+                if last_space > start:
+                    end = last_space
         
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-        
-        return chunks
-    
-    chunks = []
-    start_idx = 0
-    
-    for boundary in boundaries:
-        if boundary > start_idx:
-            chunk = " ".join(sentences[start_idx:boundary])
-            chunks.append(chunk)
-            start_idx = boundary
-    
-    if start_idx < len(sentences):
-        chunk = " ".join(sentences[start_idx:])
-        chunks.append(chunk)
+        chunks.append(text[start:end].strip())
+        start = end - overlap
     
     return chunks
 
-def extract_topic_tags(text: str, max_tags: int = 3) -> List[str]:
-    """Extract simple topic tags from text based on frequency."""
-    cleaned = re.sub(r'[^\w\s]', '', text.lower())
-    words = cleaned.split()
-    
-    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 
-                 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'about', 'like', 
-                 'through', 'over', 'before', 'between', 'after', 'since', 'without',
-                 'under', 'of', 'this', 'that', 'these', 'those', 'it', 'they', 'them',
-                 'assistant', 'user'}
-    
-    filtered_words = [w for w in words if w not in stop_words and len(w) > 3]
-    
-    word_counts = {}
-    for word in filtered_words:
-        word_counts[word] = word_counts.get(word, 0) + 1
-    
-    sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
-    tags = [word for word, _ in sorted_words[:max_tags]]
-    
-    return tags
-
-def get_recency_score(timestamp: str) -> float:
-    """Calculate a recency score based on timestamp (0-1 scale)."""
-    if not timestamp:
-        return 0.0
-    
-    try:
-        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-        now = datetime.now().astimezone()
-        
-        days_diff = (now - dt).days
-        
-        score = max(0.0, min(1.0, 1.0 * (0.9 ** days_diff)))
-        return score
-    except Exception:
-        return 0.0
-
-def create_conversation_turns(conversation: Dict[str, Any], 
-                             indexed_turn_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
-    """Create conversation turns (user message + AI response pairs) from a conversation."""
-    turns = []
-    indexed_turn_ids = indexed_turn_ids or set()
-    
-    messages = conversation.get("chat_messages", [])
-    conv_id = conversation.get("uuid", "unknown")
-    conv_name = conversation.get("name", "Untitled conversation")
-    
-    i = 0
-    while i < len(messages) - 1:
-        user_msg = messages[i]
-        ai_msg = messages[i+1]
-        
-        if user_msg.get("sender") == "human" and ai_msg.get("sender") == "assistant":
-            turn_id = f"{user_msg.get('uuid', '')}_{ai_msg.get('uuid', '')}"
-            
-            if turn_id in indexed_turn_ids:
-                i += 2
-                continue
-            
-            user_text = ""
-            if user_msg.get("text"):
-                user_text = user_msg.get("text")
-            elif isinstance(user_msg.get("content"), dict) and user_msg["content"].get("text"):
-                user_text = user_msg["content"]["text"]
-            
-            ai_text = ""
-            if ai_msg.get("text"):
-                ai_text = ai_msg.get("text")
-            elif isinstance(ai_msg.get("content"), dict) and ai_msg["content"].get("text"):
-                ai_text = ai_msg["content"]["text"]
-            
-            user_text_clean = clean_text(user_text)
-            ai_text_clean = clean_text(ai_text)
-            
-            if user_text_clean and ai_text_clean:
-                user_timestamp = user_msg.get("created_at", "")
-                ai_timestamp = ai_msg.get("created_at", "")
-                
-                timestamp = max(user_timestamp, ai_timestamp) if user_timestamp and ai_timestamp else (user_timestamp or ai_timestamp)
-                
-                turn = {
-                    "turn_id": turn_id,
-                    "conversation_id": conv_id,
-                    "conversation_name": conv_name,
-                    "user_message_id": user_msg.get("uuid", ""),
-                    "ai_message_id": ai_msg.get("uuid", ""),
-                    "user_text": user_text,
-                    "user_text_clean": user_text_clean,
-                    "ai_text": ai_text,
-                    "ai_text_clean": ai_text_clean,
-                    "timestamp": timestamp,
-                    "message_index": i,
-                    "recency_score": get_recency_score(timestamp),
-                    "topic_tags": extract_topic_tags(user_text_clean + " " + ai_text_clean)
-                }
-                
-                turns.append(turn)
-        
-        i += 1
-    
-    return turns
-
-def create_overlapping_chunks(turn: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Create overlapping chunks from a conversation turn with sliding windows."""
-    chunks = []
-    
-    ai_chunks = chunk_ai_response_with_topic_detection(turn["ai_text_clean"])
-    
-    if len(ai_chunks) <= 1:
-        chunk_id = f"{turn['turn_id']}_chunk_0"
-        
-        chunk = {
-            "chunk_id": chunk_id,
-            "turn_id": turn["turn_id"],
-            "conversation_id": turn["conversation_id"],
-            "conversation_name": turn["conversation_name"],
-            "user_message_id": turn["user_message_id"],
-            "ai_message_id": turn["ai_message_id"],
-            "user_text": turn["user_text_clean"],
-            "ai_text": turn["ai_text_clean"],
-            "text": f"User: {turn['user_text_clean']}\n\nAssistant: {turn['ai_text_clean']}",
-            "timestamp": turn["timestamp"],
-            "message_index": turn["message_index"],
-            "chunk_index": 0,
-            "total_chunks": 1,
-            "recency_score": turn["recency_score"],
-            "topic_tags": turn["topic_tags"],
-            "adjacent_context": ""
-        }
-        
-        chunks.append(chunk)
-        return chunks
-    
-    for i, ai_chunk in enumerate(ai_chunks):
-        chunk_id = f"{turn['turn_id']}_chunk_{i}"
-        
-        adjacent_context = ""
-        
-        if i > 0:
-            prev_sentences = split_into_sentences(ai_chunks[i-1])
-            if prev_sentences:
-                num_sentences = min(2, len(prev_sentences))
-                adjacent_context += "Previous: " + " ".join(prev_sentences[-num_sentences:]) + "\n\n"
-        
-        if i < len(ai_chunks) - 1:
-            next_sentences = split_into_sentences(ai_chunks[i+1])
-            if next_sentences:
-                num_sentences = min(2, len(next_sentences))
-                adjacent_context += "Next: " + " ".join(next_sentences[:num_sentences])
-        
-        chunk_text = f"User: {turn['user_text_clean']}\n\nAssistant: {ai_chunk}"
-        
-        chunk_topic_tags = extract_topic_tags(turn['user_text_clean'] + " " + ai_chunk)
-        
-        chunk = {
-            "chunk_id": chunk_id,
-            "turn_id": turn["turn_id"],
-            "conversation_id": turn["conversation_id"],
-            "conversation_name": turn["conversation_name"],
-            "user_message_id": turn["user_message_id"],
-            "ai_message_id": turn["ai_message_id"],
-            "user_text": turn["user_text_clean"],
-            "ai_text": ai_chunk,
-            "text": chunk_text,
-            "timestamp": turn["timestamp"],
-            "message_index": turn["message_index"],
-            "chunk_index": i,
-            "total_chunks": len(ai_chunks),
-            "recency_score": turn["recency_score"],
-            "topic_tags": chunk_topic_tags,
-            "adjacent_context": adjacent_context
-        }
-        
-        chunks.append(chunk)
-    
-    return chunks
-
-def extract_conversation_turns(conversations: List[Dict[str, Any]], 
-                              indexed_turn_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
-    """Extract conversation turns and create chunks for indexing."""
-    all_chunks = []
-    indexed_turn_ids = indexed_turn_ids or set()
+def extract_messages(conversations: List[Dict[str, Any]], 
+                     indexed_msg_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
+    """Extract and prepare messages for indexing from all conversations."""
+    all_messages = []
+    indexed_msg_ids = indexed_msg_ids or set()
     
     for conv in tqdm(conversations, desc="Processing conversations"):
-        turns = create_conversation_turns(conv, indexed_turn_ids)
+        conv_id = conv.get("uuid", "unknown")
+        conv_name = conv.get("name", "Untitled conversation")
         
-        for turn in turns:
-            chunks = create_overlapping_chunks(turn)
-            all_chunks.extend(chunks)
+        messages = conv.get("chat_messages", [])
+        turns = []
+        current_turn = []
+        
+        for msg in messages:
+            if msg.get("sender") == "human" and current_turn:
+                turns.append(current_turn)
+                current_turn = [msg]
+            else:
+                current_turn.append(msg)
+        
+        if current_turn:
+            turns.append(current_turn)
+            
+        for turn_idx, turn in enumerate(turns):
+            turn_id = f"{conv_id}_turn_{turn_idx}"
+            
+            if turn_id in indexed_msg_ids:
+                continue
+            
+            turn_text = ""
+            for msg in turn:
+                if not should_index_message(msg):
+                    continue
+                    
+                text = ""
+                if isinstance(msg.get("content"), dict) and msg["content"].get("text"):
+                    text = msg["content"]["text"]
+                elif msg.get("text"):
+                    text = msg["text"]
+                
+                if text:
+                    cleaned = clean_text(text)
+                    if cleaned:
+                        turn_text += f"{msg.get('sender', 'unknown')}: {cleaned}\n"
+            
+            if not turn_text:
+                continue
+                
+            chunks = chunk_text(turn_text, chunk_size=768, overlap=100)
+            
+            for chunk_idx, chunk in enumerate(chunks):
+                chunk_id = f"{turn_id}_chunk_{chunk_idx}" if len(chunks) > 1 else turn_id
+                
+                message_record = {
+                    "conversation_id": conv_id,
+                    "conversation_name": conv_name,
+                    "message_id": chunk_id,
+                    "parent_message_id": turn_id,
+                    "turn_index": turn_idx,
+                    "chunk_index": chunk_idx if len(chunks) > 1 else 0,
+                    "total_chunks": len(chunks),
+                    "text": chunk,
+                    "original_text": turn_text
+                }
+                
+                all_messages.append(message_record)
     
-    print(f"Extracted {len(all_chunks)} chunks for indexing")
-    return all_chunks
+    print(f"Extracted {len(all_messages)} chunks for indexing")
+    return all_messages
 
-def generate_embeddings(chunks: List[Dict[str, Any]], batch_size: int = 32) -> Dict[str, List]:
-    """Generate embeddings for chunks"""
-    model = SentenceTransformer(DENSE_EMBEDDING_MODEL)
+def generate_embeddings(messages: List[Dict[str, Any]], batch_size: int = 32) -> Dict[str, List]:
+    """Generate embeddings for messages"""
+    model = get_model()  # Use the singleton model
     
     ids = []
     texts = []
     metadatas = []
     
-    for chunk in chunks:
-        ids.append(chunk["chunk_id"])
-        texts.append(chunk["text"])
+    for msg in messages:
+        ids.append(msg["message_id"])
+        texts.append(msg["text"])
         
-        metadata = {
-            "conversation_id": chunk["conversation_id"],
-            "conversation_name": chunk["conversation_name"],
-            "turn_id": chunk["turn_id"],
-            "user_message_id": chunk["user_message_id"],
-            "ai_message_id": chunk["ai_message_id"],
-            "timestamp": chunk["timestamp"],
-            "message_index": chunk["message_index"],
-            "chunk_index": chunk["chunk_index"],
-            "total_chunks": chunk["total_chunks"],
-            "recency_score": chunk["recency_score"],
-            "topic_tags": ",".join(chunk["topic_tags"]),
-            "adjacent_context": chunk["adjacent_context"]
-        }
-        
+        metadata = {k: v for k, v in msg.items() if k != "text" and k != "original_text"}
         metadatas.append(metadata)
     
     embeddings = []
@@ -574,38 +250,36 @@ def index_conversations(file_path: str, batch_size: int = 1000, checkpoint_inter
     setup_directories()
     
     checkpoint = load_checkpoint(file_path)
-    indexed_turn_ids = set(checkpoint["indexed_turn_ids"]) if checkpoint and "indexed_turn_ids" in checkpoint else set()
+    indexed_msg_ids = set(checkpoint["indexed_msg_ids"]) if checkpoint else set()
     
     conversations = load_conversations(file_path)
     if not conversations:
         print("No conversations to index. Exiting.")
         return
-     
-    chunks = extract_conversation_turns(conversations, indexed_turn_ids)
-    if not chunks:
-        print("No new chunks to index. Exiting.")
+    
+    messages = extract_messages(conversations, indexed_msg_ids)
+    if not messages:
+        print("No new messages to index. Exiting.")
         return
 
     if progress_callback:
-        progress_callback(0.0, len(chunks), 0)
+        progress_callback(0.0, len(messages), 0)
     
     client = setup_chroma_db()
     collection = get_or_create_collection(client)
     
-    processed_turn_ids = set()
-    
     total_indexed = 0
-    for chunk_start in range(0, len(chunks), checkpoint_interval):
-        chunk_end = min(chunk_start + checkpoint_interval, len(chunks))
-        batch_chunks = chunks[chunk_start:chunk_end]
+    for chunk_start in range(0, len(messages), checkpoint_interval):
+        chunk_end = min(chunk_start + checkpoint_interval, len(messages))
+        chunk_messages = messages[chunk_start:chunk_end]
         
-        print(f"Processing chunk {chunk_start//checkpoint_interval + 1}: chunks {chunk_start} to {chunk_end-1}")
+        print(f"Processing chunk {chunk_start//checkpoint_interval + 1}: messages {chunk_start} to {chunk_end-1}")
         
-        data = generate_embeddings(batch_chunks)
+        data = generate_embeddings(chunk_messages)
         
-        total_in_batch = len(data["ids"])
-        for i in tqdm(range(0, total_in_batch, batch_size), desc="Indexing in ChromaDB"):
-            end_idx = min(i + batch_size, total_in_batch)
+        total_in_chunk = len(data["ids"])
+        for i in tqdm(range(0, total_in_chunk, batch_size), desc="Indexing in ChromaDB"):
+            end_idx = min(i + batch_size, total_in_chunk)
             
             batch_data = {
                 "ids": data["ids"][i:end_idx],
@@ -616,87 +290,67 @@ def index_conversations(file_path: str, batch_size: int = 1000, checkpoint_inter
             
             collection.add(**batch_data)
         
-        for chunk in batch_chunks:
-            processed_turn_ids.add(chunk["turn_id"])
-        
-        total_indexed += total_in_batch
-        
-        all_indexed_turn_ids = indexed_turn_ids.union(processed_turn_ids)
+        indexed_msg_ids.update(data["ids"])
+        total_indexed += total_in_chunk
         
         checkpoint_data = {
             "file_path": file_path,
-            "indexed_turn_ids": list(all_indexed_turn_ids),
+            "indexed_msg_ids": list(indexed_msg_ids),
             "total_indexed": total_indexed,
             "last_processed": chunk_end
         }
         save_checkpoint(checkpoint_data, file_path)
         
-        print(f"Checkpoint saved after processing {total_indexed} chunks")
+        print(f"Checkpoint saved after processing {total_indexed} messages")
 
         if progress_callback:
-            progress = total_indexed / len(chunks) if chunks else 1.0
-            progress_callback(progress, len(chunks), total_indexed)
+            progress = total_indexed / len(messages) if messages else 1.0
+            progress_callback(progress, len(messages), total_indexed)
     
-    print(f"Successfully indexed {total_indexed} chunks into ChromaDB")
+    print(f"Successfully indexed {total_indexed} messages into ChromaDB")
     print(f"Collection stats: {collection.count()} total documents")
 
     if progress_callback:
-        progress_callback(1.0, len(chunks), total_indexed)
-
-# # Test function to display sample chunks from conversations
-# def test_chunking(file_path: str, num_conversations: int = 20, verbose: bool = True):
-#     """
-#     Test the chunking process on a sample of conversations and display the results.
-    
-#     Args:
-#         file_path: Path to the conversations.json file
-#         num_conversations: Number of conversations to sample
-#         verbose: Whether to print detailed information about each chunk
-#     """
-#     print(f"\n{'='*80}\nTESTING CHUNKING ON SAMPLE CONVERSATIONS\n{'='*80}")
-    
-#     # Load conversations
-#     conversations = load_conversations(file_path)
-#     if not conversations:
-#         print("No conversations found. Exiting test.")
-#         return
-    
-#     sample = conversations[:num_conversations]
-#     print(f"Testing on {len(sample)} conversations")
-    
-#     total_chunks = 0
-    
-#     for conv_idx, conv in enumerate(sample):
-#         print(f"\n{'-'*80}\nConversation {conv_idx+1}: {conv.get('name', 'Untitled')}\n{'-'*80}")
-        
-#         turns = create_conversation_turns(conv, set())
-#         print(f"Found {len(turns)} turns in this conversation")
-        
-#         for turn_idx, turn in enumerate(turns):
-#             print(f"\nTurn {turn_idx+1}:")
-#             print(f"User: {turn['user_text_clean'][:100]}..." if len(turn['user_text_clean']) > 100 else f"User: {turn['user_text_clean']}")
-            
-#             chunks = create_overlapping_chunks(turn)
-#             total_chunks += len(chunks)
-            
-#             print(f"AI response split into {len(chunks)} chunks")
-            
-#             if verbose:
-#                 for chunk_idx, chunk in enumerate(chunks):
-#                     print(f"\n  Chunk {chunk_idx+1}/{len(chunks)}:")
-#                     print(f"  Topic tags: {', '.join(chunk['topic_tags'])}")
-#                     print(f"  AI text ({estimate_token_count(chunk['ai_text'])} tokens):")
-#                     print(f"  {chunk['ai_text'][:150]}..." if len(chunk['ai_text']) > 150 else f"  {chunk['ai_text']}")
-#                     if chunk['adjacent_context']:
-#                         print(f"  Adjacent context: {chunk['adjacent_context'][:100]}..." if len(chunk['adjacent_context']) > 100 else f"  Adjacent context: {chunk['adjacent_context']}")
-    
-#     print(f"\n{'='*80}\nSummary: Processed {len(sample)} conversations with {total_chunks} total chunks\n{'='*80}")
+        progress_callback(1.0, len(messages), total_indexed)
 
 # if __name__ == "__main__":
-#     import sys
 #     file_path = "conversations.json"
+#     print(f"Loading conversations from {file_path}")
     
-#     if len(sys.argv) > 1:
-#         file_path = sys.argv[1]
-    
-#     test_chunking(file_path, num_conversations=20, verbose=True)
+#     try:
+#         with open(file_path, 'r', encoding='utf-8') as f:
+#             all_conversations = json.load(f)
+            
+#         sample_conversations = all_conversations[:5]
+#         print(f"\nProcessing sample of {len(sample_conversations)} conversations")
+        
+#         messages = extract_messages(sample_conversations)
+        
+#         print("\nChunking Statistics:")
+#         print(f"Total chunks generated: {len(messages)}")
+        
+#         chunks_by_conv = {}
+#         for msg in messages:
+#             conv_id = msg["conversation_id"]
+#             if conv_id not in chunks_by_conv:
+#                 chunks_by_conv[conv_id] = []
+#             chunks_by_conv[conv_id].append(msg)
+        
+#         for conv_id, chunks in chunks_by_conv.items():
+#             print(f"\nConversation: {chunks[0]['conversation_name']} ({conv_id})")
+#             print(f"Number of turns: {max(c['turn_index'] for c in chunks) + 1}")
+#             print(f"Number of chunks: {len(chunks)}")
+            
+#             sample_chunk = chunks[0]
+#             print("\nSample chunk:")
+#             print(f"Turn index: {sample_chunk['turn_index']}")
+#             print(f"Chunk index: {sample_chunk['chunk_index']} of {sample_chunk['total_chunks']}")
+#             print("Content:")
+#             print(sample_chunk['text'])
+            
+#     except FileNotFoundError:
+#         print(f"Error: {file_path} not found. Please ensure the conversations.json file is in the root directory.")
+#     except json.JSONDecodeError:
+#         print(f"Error: {file_path} is not valid JSON.")
+#     except Exception as e:
+#         print(f"Error: {str(e)}")

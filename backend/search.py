@@ -7,22 +7,18 @@ import time
 
 CHROMA_DIR = os.path.join("data", "chroma_db")
 COLLECTION_NAME = "claude_conversations"
-MODEL_NAME = 'Snowflake/snowflake-arctic-embed-xs'
+DENSE_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_TOP_K = 5
 CLAUDE_BASE_URL = "https://claude.ai/chat/"
 
-_model_instance = None
+_model_singleton = None
 
 def get_model():
-    """Get or initialize the sentence transformer model (singleton pattern)."""
-    global _model_instance
-    if _model_instance is None:
-        print("Loading sentence transformer model (first run)...")
-        start_time = time.time()
-        _model_instance = SentenceTransformer(MODEL_NAME)
-        elapsed = time.time() - start_time
-        print(f"Model loaded in {elapsed:.2f} seconds")
-    return _model_instance
+    """Get or create the sentence transformer model singleton."""
+    global _model_singleton
+    if _model_singleton is None:
+        _model_singleton = SentenceTransformer(DENSE_EMBEDDING_MODEL)
+    return _model_singleton
 
 def setup_chroma_client() -> chromadb.PersistentClient:
     """Initialize and return a ChromaDB client."""

@@ -1,6 +1,6 @@
 # ReSonnet
 
-> Claude.ai's built-in search only supports keyword matching on conversation titles with no ability to search message content.
+> Claude.ai's built-in search only supports matching on conversation titles with no ability to search message content.
 
 ReSonnet is a lightweight vector search that creates a searchable memory of all your past interactions on Claude.ai. It provides a human-friendly search interface as well as function calling capabilities, effectively transforming `claude-3-7-sonnet` into an infinite-turn companion by enabling contextual retrieval of previous conversations.
 

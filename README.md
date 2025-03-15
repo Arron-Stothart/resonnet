@@ -7,8 +7,14 @@ ReSonnet is a lightweight vector search that creates a searchable memory of all 
 ## Get Sarted
 1. **Export**: Export `conversations.json` from Claude.ai
     ![export](https://github.com/user-attachments/assets/e0ccd6d1-b3ff-4f3e-95db-a0f6be3b11ae)
-2. **Index**: Process and embed all conversations
-3. **Search**: During conversations, Claude can query this database to recall relevant context
+2. **Index**: Process and embed all conversations (10-15 minutes)
+    - Creates ChromaDB database in `data/chroma_db`
+    - Generates embeddings all conversation turns (user and assistant)
+    - `naver/splade-v3-distilbert` sparse embedding model quantized to 8-bit (268MB)
+    - `all-MiniLM-L6-v2` dense embedding model (124MB) 
+3. **Search**: Hybrid search with keyword and dense retrieval + fusion function (10-20ms)
+    - During conversations, Claude can query this index to recall relevant context 
+    - Human-friendly search interface
 
 ## Why is Searching Chat History Challenging?
 
@@ -65,4 +71,4 @@ Embedding and Ranking models have to be small as they are again loaded and used 
 - Conversation level embedding that is queried first 
 - Knowledge Graph of Conversations and Tiered Retrieval Strategy
 - [CogGRAG](https://arxiv.org/abs/2503.06567)
-
+- [Local Vector Database with RxDB and transformers.js in JavaScript](https://rxdb.info/articles/javascript-vector-database.html)

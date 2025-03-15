@@ -4,7 +4,9 @@ import pickle
 from typing import Dict, List, Any, Optional, Set
 from tqdm import tqdm
 import chromadb
-from sentence_transformers import SentenceTransformer
+import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+import numpy as np
 import re
 import hashlib
 
@@ -12,16 +14,23 @@ DATA_DIR = "data"
 CHROMA_DIR = os.path.join(DATA_DIR, "chroma_db")
 CHECKPOINT_DIR = os.path.join(DATA_DIR, "checkpoints")
 COLLECTION_NAME = "claude_conversations"
-DENSE_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+SPLADE_MODEL = "naver/splade-v3-distilbert"
+MAX_LENGTH = 512
 
 _model_singleton = None
+_tokenizer_singleton = None
 
-def get_model():
-    """Get or create the sentence transformer model singleton."""
-    global _model_singleton
-    if _model_singleton is None:
-        _model_singleton = SentenceTransformer(DENSE_EMBEDDING_MODEL)
-    return _model_singleton
+def get_model_and_tokenizer():
+    """Get or create the SPLADE model and tokenizer singletons."""
+    global _model_singleton, _tokenizer_singleton
+    if _model_singleton is None or _tokenizer_singleton is None:
+        _tokenizer_singleton = AutoTokenizer.from_pretrained(SPLADE_MODEL)
+        full_model = AutoModelForMaskedLM.from_pretrained(SPLADE_MODEL)
+        _model_singleton = torch.quantization.quantize_dynamic(
+            full_model, {torch.nn.Linear}, dtype=torch.qint8
+        )
+        _model_singleton.eval()  # Set to evaluation mode
+    return _model_singleton, _tokenizer_singleton
 
 def setup_directories():
     """Create necessary directories for data storage."""
@@ -217,26 +226,43 @@ def extract_messages(conversations: List[Dict[str, Any]],
     print(f"Extracted {len(all_messages)} chunks for indexing")
     return all_messages
 
-def generate_embeddings(messages: List[Dict[str, Any]], batch_size: int = 32) -> Dict[str, List]:
-    """Generate embeddings for messages"""
-    model = get_model()  # Use the singleton model
+def generate_embeddings(messages: List[Dict[str, Any]], batch_size: int = 8) -> Dict[str, List]:
+    """Generate SPLADE embeddings for messages"""
+    model, tokenizer = get_model_and_tokenizer()
     
     ids = []
     texts = []
     metadatas = []
+    embeddings = []
     
     for msg in messages:
         ids.append(msg["message_id"])
         texts.append(msg["text"])
-        
         metadata = {k: v for k, v in msg.items() if k != "text" and k != "original_text"}
         metadatas.append(metadata)
     
-    embeddings = []
-    for i in tqdm(range(0, len(texts), batch_size), desc="Generating embeddings"):
+    for i in tqdm(range(0, len(texts), batch_size), desc="Generating SPLADE embeddings"):
         batch_texts = texts[i:i+batch_size]
-        batch_embeddings = model.encode(batch_texts)
-        embeddings.extend(batch_embeddings.tolist())
+        
+        # Process each text in the batch
+        batch_embeddings = []
+        for text in batch_texts:
+            inputs = tokenizer(text, return_tensors="pt", max_length=MAX_LENGTH, truncation=True)
+            
+            with torch.no_grad():
+                outputs = model(**inputs)
+                # Get SPLADE sparse weights
+                logits = outputs.logits[0]
+                # ReLU activation and log1p for SPLADE-style weighting
+                weights = torch.log1p(torch.relu(logits))
+                # Convert to sparse representation
+                values, indices = torch.max(weights, dim=0)
+                # Create sparse vector
+                sparse_vec = np.zeros(tokenizer.vocab_size)
+                sparse_vec[indices.numpy()] = values.numpy()
+                batch_embeddings.append(sparse_vec.tolist())
+        
+        embeddings.extend(batch_embeddings)
     
     return {
         "ids": ids,

@@ -1,24 +1,30 @@
 import os
 import chromadb
-from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
 from datetime import datetime
 import time
+import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+import numpy as np
 
 CHROMA_DIR = os.path.join("data", "chroma_db")
 COLLECTION_NAME = "claude_conversations"
-DENSE_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+SPLADE_MODEL = "naver/splade-v3-distilbert"
 DEFAULT_TOP_K = 5
 CLAUDE_BASE_URL = "https://claude.ai/chat/"
+MAX_LENGTH = 512
 
 _model_singleton = None
+_tokenizer_singleton = None
 
-def get_model():
-    """Get or create the sentence transformer model singleton."""
-    global _model_singleton
-    if _model_singleton is None:
-        _model_singleton = SentenceTransformer(DENSE_EMBEDDING_MODEL)
-    return _model_singleton
+def get_model_and_tokenizer():
+    """Get or create the SPLADE model and tokenizer singletons."""
+    global _model_singleton, _tokenizer_singleton
+    if _model_singleton is None or _tokenizer_singleton is None:
+        _tokenizer_singleton = AutoTokenizer.from_pretrained(SPLADE_MODEL)
+        _model_singleton = AutoModelForMaskedLM.from_pretrained(SPLADE_MODEL)
+        _model_singleton.eval()  # Set to evaluation mode
+    return _model_singleton, _tokenizer_singleton
 
 def setup_chroma_client() -> chromadb.PersistentClient:
     """Initialize and return a ChromaDB client."""
@@ -37,10 +43,29 @@ def get_collection(client: chromadb.PersistentClient) -> chromadb.Collection:
         raise ValueError(f"Collection '{COLLECTION_NAME}' not found. Please run indexing first.")
 
 def generate_query_embedding(query: str) -> List[float]:
-    """Generate embedding for the search query."""
-    model = get_model() 
-    embedding = model.encode(query)
-    return embedding.tolist()
+    """Generate SPLADE sparse embedding for the search query."""
+    model, tokenizer = get_model_and_tokenizer()
+    
+    # Tokenize and prepare input
+    inputs = tokenizer(query, return_tensors="pt", max_length=MAX_LENGTH, truncation=True)
+    
+    with torch.no_grad():
+        outputs = model(**inputs)
+        # Get SPLADE sparse weights
+        logits = outputs.logits[0]  # First sequence
+        # ReLU activation and log1p for SPLADE-style weighting
+        weights = torch.log1p(torch.relu(logits))
+        # Convert to sparse representation
+        values, indices = torch.max(weights, dim=0)
+        # Convert to numpy for easier handling
+        values = values.numpy()
+        indices = indices.numpy()
+    
+    # Create sparse vector
+    sparse_vec = np.zeros(tokenizer.vocab_size)
+    sparse_vec[indices] = values
+    
+    return sparse_vec.tolist()
 
 def search_conversations(query: str, top_k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
     """Search for conversations using both keyword and dense retrieval."""
@@ -79,9 +104,8 @@ def search_conversations(query: str, top_k: int = DEFAULT_TOP_K) -> List[Dict[st
             "conversation_id": metadata["conversation_id"],
             "conversation_name": metadata["conversation_name"],
             "message_id": metadata["message_id"],
-            "sender": metadata["sender"],
-            "timestamp": metadata["timestamp"],
-            "message_index": metadata["message_index"],
+            "timestamp": metadata.get("timestamp", ""),
+            "message_index": metadata.get("message_index", 0),
             "text": document,
             "url": generate_conversation_url(metadata["conversation_id"])
         }
@@ -122,7 +146,6 @@ def display_search_results(results: List[Dict[str, Any]]) -> None:
         print(f"Conversation: {result['conversation_name']}")
         print(f"URL: {result['url']}")
         print(f"Time: {format_timestamp(result['timestamp'])}")
-        print(f"Sender: {result['sender']}")
         print(f"\n{result['text']}\n")
         print(f"\n{'-' * 80}\n")
 

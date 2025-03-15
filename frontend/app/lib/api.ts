@@ -4,7 +4,6 @@ export interface SearchResult {
   conversation_id: string;
   conversation_name: string;
   message_id: string;
-  sender: string;
   timestamp: string;
   message_index: number;
   text: string;

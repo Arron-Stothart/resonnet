@@ -65,4 +65,5 @@ Embedding and Ranking models have to be small as they are again loaded and used 
 - Conversation level embedding that is queried first 
 - Knowledge Graph of Conversations and Tiered Retrieval Strategy
 - [CogGRAG](https://arxiv.org/abs/2503.06567)
+- [Long Context Modeling with Ranked Memory-Augmented Retrieval](https://arxiv.org/abs/2503.14800)
 

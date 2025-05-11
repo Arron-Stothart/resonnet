@@ -1,30 +1,24 @@
 import os
 import chromadb
+from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
 from datetime import datetime
 import time
-import torch
-from transformers import AutoModelForMaskedLM, AutoTokenizer
-import numpy as np
 
 CHROMA_DIR = os.path.join("data", "chroma_db")
 COLLECTION_NAME = "claude_conversations"
-SPLADE_MODEL = "naver/splade-v3-distilbert"
+DENSE_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_TOP_K = 5
 CLAUDE_BASE_URL = "https://claude.ai/chat/"
-MAX_LENGTH = 512
 
 _model_singleton = None
-_tokenizer_singleton = None
 
-def get_model_and_tokenizer():
-    """Get or create the SPLADE model and tokenizer singletons."""
-    global _model_singleton, _tokenizer_singleton
-    if _model_singleton is None or _tokenizer_singleton is None:
-        _tokenizer_singleton = AutoTokenizer.from_pretrained(SPLADE_MODEL)
-        _model_singleton = AutoModelForMaskedLM.from_pretrained(SPLADE_MODEL)
-        _model_singleton.eval()  # Set to evaluation mode
-    return _model_singleton, _tokenizer_singleton
+def get_model():
+    """Get or create the sentence transformer model singleton."""
+    global _model_singleton
+    if _model_singleton is None:
+        _model_singleton = SentenceTransformer(DENSE_EMBEDDING_MODEL)
+    return _model_singleton
 
 def setup_chroma_client() -> chromadb.PersistentClient:
     """Initialize and return a ChromaDB client."""
@@ -43,29 +37,10 @@ def get_collection(client: chromadb.PersistentClient) -> chromadb.Collection:
         raise ValueError(f"Collection '{COLLECTION_NAME}' not found. Please run indexing first.")
 
 def generate_query_embedding(query: str) -> List[float]:
-    """Generate SPLADE sparse embedding for the search query."""
-    model, tokenizer = get_model_and_tokenizer()
-    
-    # Tokenize and prepare input
-    inputs = tokenizer(query, return_tensors="pt", max_length=MAX_LENGTH, truncation=True)
-    
-    with torch.no_grad():
-        outputs = model(**inputs)
-        # Get SPLADE sparse weights
-        logits = outputs.logits[0]  # First sequence
-        # ReLU activation and log1p for SPLADE-style weighting
-        weights = torch.log1p(torch.relu(logits))
-        # Convert to sparse representation
-        values, indices = torch.max(weights, dim=0)
-        # Convert to numpy for easier handling
-        values = values.numpy()
-        indices = indices.numpy()
-    
-    # Create sparse vector
-    sparse_vec = np.zeros(tokenizer.vocab_size)
-    sparse_vec[indices] = values
-    
-    return sparse_vec.tolist()
+    """Generate embedding for the search query."""
+    model = get_model() 
+    embedding = model.encode(query)
+    return embedding.tolist()
 
 def search_conversations(query: str, top_k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
     """Search for conversations using both keyword and dense retrieval."""
@@ -104,9 +79,9 @@ def search_conversations(query: str, top_k: int = DEFAULT_TOP_K) -> List[Dict[st
             "conversation_id": metadata["conversation_id"],
             "conversation_name": metadata["conversation_name"],
             "message_id": metadata["message_id"],
-            "timestamp": metadata.get("timestamp", ""),
-            "message_index": metadata.get("message_index", 0),
-            "text": document,
+            # "timestamp": metadata["timestamp"],
+            # "message_index": metadata["message_index"],
+            "text": metadata.get("original_text", document),
             "url": generate_conversation_url(metadata["conversation_id"])
         }
         
@@ -161,3 +136,59 @@ def search_and_display(query: str, top_k: int = DEFAULT_TOP_K) -> List[Dict[str,
     except Exception as e:
         print(f"Error searching conversations: {e}")
         return []
+
+if __name__ == "__main__":
+    print("Testing search functionality and inspecting chunks...")
+    
+    try:
+        # Set up ChromaDB connection
+        client = setup_chroma_client()
+        collection = get_collection(client)
+        
+        # Get total count of documents
+        total_docs = collection.count()
+        print(f"\nTotal documents in collection: {total_docs}")
+        
+        # Get a sample of documents
+        sample_results = collection.query(
+            query_embeddings=[[0] * 384],  # Dummy embedding to get random samples
+            n_results=5,
+            include=["metadatas", "documents"]
+        )
+        
+        print("\nSample chunks from the database:")
+        print("=" * 80)
+        
+        for i, (metadata, document) in enumerate(zip(
+                sample_results["metadatas"][0],
+                sample_results["documents"][0])):
+            
+            print(f"\nChunk #{i+1}:")
+            print(f"Conversation: {metadata['conversation_name']}")
+            print(f"Turn Index: {metadata['turn_index']}")
+            print(f"Chunk {metadata['chunk_index']} of {metadata['total_chunks']}")
+            print("\nStored document text:")
+            print("-" * 40)
+            print(document)
+            print("-" * 40)
+            print("\nOriginal text from metadata:")
+            print("-" * 40)
+            print(metadata.get('original_text', 'No original text stored'))
+            print("\n" + "=" * 80)
+        
+        # Test a specific search
+        test_query = "Attio"
+        print(f"\nTesting search with query: '{test_query}'")
+        results = search_conversations(test_query, top_k=3)
+        
+        print("\nSearch results:")
+        for result in results:
+            print("\n" + "=" * 80)
+            print(f"Score: {result['relevance_score']:.3f}")
+            print(f"Conversation: {result['conversation_name']}")
+            print("\nText content:")
+            print("-" * 40)
+            print(result['text'])
+            
+    except Exception as e:
+        print(f"Error during testing: {e}")

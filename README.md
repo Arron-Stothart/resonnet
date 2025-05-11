@@ -56,10 +56,14 @@ Refers to session where a detailed artefact report was generated.
     - `"Debug for AWS deployment error"` \
 This user wants to find the code block this was finally resolved in. The code block may be an incremental change with the entireity of the fix only known if combined with the original file. The correct assistant answer may not have any positive feedback: has the user closed the session because they've gotten what they needed, or have they given up?
 
+**SPLADE** wins if: The priority is fast, keyword-driven searches and if storage and speed are critical. It’s also better for short, term-specific queries common in chats.
+**Dense embeddings** win if: We want to search by meaning or intent or need to connect related ideas across a conversation. They’re ideal for usage by LLMs for this 'infinite context' effect. Also preffered for smaller data sets
 
-To cover all of these, a hyrbid sparse (keyword) and semantic (dense) approach is preffered. This requires an inverted index, a dense vector DB, and a fusion function for determining the most relevant results. During indexing we can either approach the chat histroy as a series of episdoes as outlines above or structued arround conversations (or both).
+To cover all of these, a hyrbid approach is preffered. This requires an inverted index, a dense vector DB, and a fusion function for determining the most relevant results.
 
 Embedding and Ranking models have to be small as they are again loaded and used on-device.
+
+#### Asisstant Side Prompting / Expose memory retrieval as a callable function
 
 ## Areas to explore:
 - Matryoshka Embeddings (Although embedding models are already small, and retrieval speed is less important)
@@ -72,3 +76,4 @@ Embedding and Ranking models have to be small as they are again loaded and used 
 - Knowledge Graph of Conversations and Tiered Retrieval Strategy
 - [CogGRAG](https://arxiv.org/abs/2503.06567)
 - [Local Vector Database with RxDB and transformers.js in JavaScript](https://rxdb.info/articles/javascript-vector-database.html)
+

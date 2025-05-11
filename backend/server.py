@@ -68,11 +68,11 @@ async def get_stats():
 
 @app.delete("/conversations")
 async def delete_conversations():
-    """Delete all indexed conversations."""
+    """Delete all indexed conversations by deleting and recreating the collection."""
     try:
         client = search.setup_chroma_client()
-        collection = search.get_collection(client)
-        collection.delete()
+        client.delete_collection(name=search.COLLECTION_NAME)
+        client.create_collection(name=search.COLLECTION_NAME)
         return {"message": "All conversations deleted successfully"}
     except Exception as e:
         return JSONResponse(

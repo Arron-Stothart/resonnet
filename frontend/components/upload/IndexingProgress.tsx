@@ -170,17 +170,17 @@ export default function IndexingProgress({ initialStats }: IndexingProgressProps
               </div>
             </div>
           ) : (
-            <div className="bg-[var(--bg-300)] rounded-lg p-6 border border-[var(--border-100)] flex flex-col items-center justify-center gap-3 cursor-pointer">
+            <div className="bg-[#262624] rounded-lg p-6 border border-[#393936] flex flex-col items-center justify-center gap-3 cursor-pointer">
               <label htmlFor="file-upload" className="w-full h-full flex flex-col items-center cursor-pointer">
-              <div className="w-12 h-12 rounded-full bg-[var(--bg-400)] flex items-center justify-center mb-3">
-                <UploadIcon className="w-6 h-6 text-[var(--text-300)]" />
+              <div className="w-12 h-12 rounded-full bg-[#262624] flex items-center justify-center mb-3">
+                <svg stroke="#C4C3BC" fill="none" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" className="w-8 h-8" xmlns="http://www.w3.org/2000/svg"><path d="M14 3v4a1 1 0 0 0 1 1h4"></path><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"></path><path d="M12 11v6"></path><path d="M9.5 13.5l2.5 -2.5l2.5 2.5"></path></svg>
               </div>
-              <p className="text-[var(--text-200)] text-sm font-medium">
+              <p className="text-[#C4C3BC] text-sm font-medium">
                 {file ? 'Replace file' : 'Drag & drop or click to upload'}
               </p>
-              <p className="text-[var(--text-400)] text-xs mt-1">
+              {/* <p className="text-[#C4C3BC] text-xs mt-1">
                 Supports conversation.json files
-              </p>
+              </p> */}
               <input
                 id="file-upload"
                 type="file"
@@ -195,9 +195,9 @@ export default function IndexingProgress({ initialStats }: IndexingProgressProps
 
           
           {file && (
-            <div className="flex items-center gap-2 p-3 bg-[var(--bg-300)] rounded-lg">
+            <div className="flex items-center gap-2 p-3 bg-[#1A1918] rounded-lg">
               <svg 
-                className="w-5 h-5 text-[var(--text-300)]" 
+                className="w-5 h-5 text-[#C4C3BC]" 
                 xmlns="http://www.w3.org/2000/svg" 
                 fill="none" 
                 viewBox="0 0 24 24" 
@@ -205,12 +205,12 @@ export default function IndexingProgress({ initialStats }: IndexingProgressProps
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span className="text-sm text-[var(--text-200)] truncate flex-1">
+              <span className="text-sm text-[#C4C3BC] truncate flex-1">
                 {file.name}
               </span>
               <button 
                 onClick={() => setFile(null)}
-                className="text-[var(--text-400)] hover:text-[var(--text-200)] transition-colors"
+                className="text-[#C4C3BC] hover:text-[#E5E5E2] transition-colors"
               >
                 <svg 
                   className="w-4 h-4" 
@@ -235,7 +235,7 @@ export default function IndexingProgress({ initialStats }: IndexingProgressProps
             <button
               onClick={handleUpload}
               disabled={!file || isUploading}
-              className="px-4 py-2 bg-[var(--accent-main-100)] text-[var(--pampas)] rounded-md hover:bg-[var(--accent-main-000)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold text-sm w-24"
+              className="px-4 py-2 bg-[#AA542E] text-[#FFFFFF] rounded-md hover:bg-[#A1512B] disabled:bg-[#A1512B] disabled:cursor-not-allowed transition-colors font-semibold text-sm w-24"
             >
               {isUploading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -273,21 +273,21 @@ export default function IndexingProgress({ initialStats }: IndexingProgressProps
   // Indexing progress UI
   if (status && !isComplete) {
     return (
-      <Card className="w-full max-w-3xl mx-auto p-6 min-h-[300px] flex flex-col justify-start bg-[var(--bg-200)] dark:bg-[var(--bg-200)] border-[var(--border-200)] backdrop-blur-sm">
+      <Card className="w-full max-w-3xl mx-auto p-6 min-h-[300px] flex flex-col justify-start bg-[#262624] rounded-xl border-[0.1px] border-[#393936]  backdrop-blur-sm">
         <CardContent className="space-y-6 pt-4">
         <div className="text-leading space-y-2">
-          <h3 className="text-2xl text-[var(--text-000)] tracking-tighter font-display font-medium">
+          <h3 className="text-2xl text-[#E5E5E2] tracking-tighter font-display font-medium">
             Processing conversation history
           </h3>
         </div>
           <div className="space-y-2">
-            <div className="flex justify-between text-sm text-[var(--text-300)] mb-1">
+            <div className="flex justify-between text-sm text-[#C4C3BC] mb-1">
               <span>{Math.round(status.progress * 100)}% complete</span>
               <span>{status.processed_messages} / {status.total_messages}</span>
             </div>
-            <div className="w-full bg-[var(--bg-300)] rounded-full h-2">
+            <div className="w-full rounded-full h-2">
               <motion.div 
-                className="bg-[var(--accent-main-100)] h-2 rounded-full" 
+                className="bg-[#AA542E] h-2 rounded-full" 
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.round(status.progress * 100)}%` }}
                 transition={{ duration: 0.5 }}

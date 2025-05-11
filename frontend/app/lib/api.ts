@@ -4,9 +4,10 @@ export interface SearchResult {
   conversation_id: string;
   conversation_name: string;
   message_id: string;
-  timestamp: string;
-  message_index: number;
+  // timestamp: string;
+  // message_index: number;
   text: string;
+  // original_text: string;
   url: string;
 }
 

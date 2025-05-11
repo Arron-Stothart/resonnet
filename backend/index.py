@@ -4,33 +4,27 @@ import pickle
 from typing import Dict, List, Any, Optional, Set
 from tqdm import tqdm
 import chromadb
-import torch
-from transformers import AutoModelForMaskedLM, AutoTokenizer
-import numpy as np
+from sentence_transformers import SentenceTransformer
 import re
 import hashlib
+from flair.data import Sentence
+from flair.models import SequenceTagger
+import torch
 
 DATA_DIR = "data"
 CHROMA_DIR = os.path.join(DATA_DIR, "chroma_db")
 CHECKPOINT_DIR = os.path.join(DATA_DIR, "checkpoints")
 COLLECTION_NAME = "claude_conversations"
-SPLADE_MODEL = "naver/splade-v3-distilbert"
-MAX_LENGTH = 512
+DENSE_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 _model_singleton = None
-_tokenizer_singleton = None
 
-def get_model_and_tokenizer():
-    """Get or create the SPLADE model and tokenizer singletons."""
-    global _model_singleton, _tokenizer_singleton
-    if _model_singleton is None or _tokenizer_singleton is None:
-        _tokenizer_singleton = AutoTokenizer.from_pretrained(SPLADE_MODEL)
-        full_model = AutoModelForMaskedLM.from_pretrained(SPLADE_MODEL)
-        _model_singleton = torch.quantization.quantize_dynamic(
-            full_model, {torch.nn.Linear}, dtype=torch.qint8
-        )
-        _model_singleton.eval()  # Set to evaluation mode
-    return _model_singleton, _tokenizer_singleton
+def get_model():
+    """Get or create the sentence transformer model singleton."""
+    global _model_singleton
+    if _model_singleton is None:
+        _model_singleton = SentenceTransformer(DENSE_EMBEDDING_MODEL)
+    return _model_singleton
 
 def setup_directories():
     """Create necessary directories for data storage."""
@@ -130,28 +124,42 @@ def load_conversations(file_path: str) -> List[Dict[str, Any]]:
         return []
 
 def chunk_text(text: str, chunk_size: int = 512, overlap: int = 50) -> List[str]:
-    """Split text into overlapping chunks."""
+    """Split text into overlapping chunks, preserving word boundaries and sentences."""
     if len(text) <= chunk_size:
         return [text]
         
     chunks = []
     start = 0
+    
     while start < len(text):
         end = start + chunk_size
         
-        if end < len(text):
-            last_sentence = max(text.rfind('.', start, end),
-                              text.rfind('!', start, end),
-                              text.rfind('?', start, end))
-            if last_sentence > start + chunk_size - 100:
-                end = last_sentence + 1
-            else:
-                last_space = text.rfind(' ', start, end)
-                if last_space > start:
-                    end = last_space
+        if end >= len(text):
+            chunks.append(text[start:].strip())
+            break
+            
+        # Try to break at sentence boundary first
+        sentence_break = max(
+            text.rfind('.', start, end),
+            text.rfind('!', start, end),
+            text.rfind('?', start, end)
+        )
         
-        chunks.append(text[start:end].strip())
-        start = end - overlap
+        # If we found a sentence break within reasonable range, use it
+        if sentence_break > start + (chunk_size // 2):
+            end = sentence_break + 1
+        else:
+            # Fall back to word boundary
+            space_break = text.rfind(' ', start, end)
+            if space_break > start:
+                end = space_break
+        
+        chunk = text[start:end].strip()
+        if chunk:  # Only add non-empty chunks
+            chunks.append(chunk)
+        
+        # Move start position for next chunk, accounting for overlap
+        start = max(start + chunk_size - overlap, end - overlap)
     
     return chunks
 
@@ -212,13 +220,15 @@ def extract_messages(conversations: List[Dict[str, Any]],
                 message_record = {
                     "conversation_id": conv_id,
                     "conversation_name": conv_name,
-                    "message_id": chunk_id,
                     "parent_message_id": turn_id,
                     "turn_index": turn_idx,
                     "chunk_index": chunk_idx if len(chunks) > 1 else 0,
                     "total_chunks": len(chunks),
                     "text": chunk,
-                    "original_text": turn_text
+                    "original_text": turn_text,
+                    "message_id": chunk_id,
+                    "timestamp": turn[0].get("timestamp", ""),
+                    "message_index": turn_idx
                 }
                 
                 all_messages.append(message_record)
@@ -226,43 +236,26 @@ def extract_messages(conversations: List[Dict[str, Any]],
     print(f"Extracted {len(all_messages)} chunks for indexing")
     return all_messages
 
-def generate_embeddings(messages: List[Dict[str, Any]], batch_size: int = 8) -> Dict[str, List]:
-    """Generate SPLADE embeddings for messages"""
-    model, tokenizer = get_model_and_tokenizer()
+def generate_embeddings(messages: List[Dict[str, Any]], batch_size: int = 32) -> Dict[str, List]:
+    """Generate embeddings for messages"""
+    model = get_model()  # Use the singleton model
     
     ids = []
     texts = []
     metadatas = []
-    embeddings = []
     
     for msg in messages:
         ids.append(msg["message_id"])
         texts.append(msg["text"])
+        
         metadata = {k: v for k, v in msg.items() if k != "text" and k != "original_text"}
         metadatas.append(metadata)
     
-    for i in tqdm(range(0, len(texts), batch_size), desc="Generating SPLADE embeddings"):
+    embeddings = []
+    for i in tqdm(range(0, len(texts), batch_size), desc="Generating embeddings"):
         batch_texts = texts[i:i+batch_size]
-        
-        # Process each text in the batch
-        batch_embeddings = []
-        for text in batch_texts:
-            inputs = tokenizer(text, return_tensors="pt", max_length=MAX_LENGTH, truncation=True)
-            
-            with torch.no_grad():
-                outputs = model(**inputs)
-                # Get SPLADE sparse weights
-                logits = outputs.logits[0]
-                # ReLU activation and log1p for SPLADE-style weighting
-                weights = torch.log1p(torch.relu(logits))
-                # Convert to sparse representation
-                values, indices = torch.max(weights, dim=0)
-                # Create sparse vector
-                sparse_vec = np.zeros(tokenizer.vocab_size)
-                sparse_vec[indices.numpy()] = values.numpy()
-                batch_embeddings.append(sparse_vec.tolist())
-        
-        embeddings.extend(batch_embeddings)
+        batch_embeddings = model.encode(batch_texts)
+        embeddings.extend(batch_embeddings.tolist())
     
     return {
         "ids": ids,
@@ -380,3 +373,65 @@ def index_conversations(file_path: str, batch_size: int = 1000, checkpoint_inter
 #         print(f"Error: {file_path} is not valid JSON.")
 #     except Exception as e:
 #         print(f"Error: {str(e)}")
+
+def extract_entities(text, tagger):
+    """
+    Extract named entities from input text using Flair.
+    Returns a list of dictionaries containing entity information.
+    """
+    # Create a Flair sentence
+    sentence = Sentence(text)
+    
+    # Run NER model
+    tagger.predict(sentence)
+    
+    # Extract entities
+    entities = []
+    for entity in sentence.get_spans('ner'):
+        entities.append({
+            'text': entity.text,
+            'entity_type': entity.tag,
+            'score': entity.score,
+            'start_pos': entity.start_position,
+            'end_pos': entity.end_position
+        })
+    
+    return entities
+
+if __name__ == "__main__":
+    # Load Flair NER model - using the standard English model
+    # You can also use 'ner-fast' for faster but less accurate predictions
+    tagger = SequenceTagger.load('ner')
+    
+    # Test cases representing different types of text you might encounter
+    test_cases = [
+        "I had a discussion with Claude about BERT and GPT models last week.",
+        "The project uses React and Node.js for the frontend development.",
+        "We implemented CRISPR techniques at Harvard Medical School in Boston.",
+        "During my vacation in Paris, I learned about European history.",
+        "The TikTok marketing campaign reached 1 million views on AWS servers."
+    ]
+    
+    print("Testing Flair NER extraction on various text types:\n")
+    
+    for text in test_cases:
+        print(f"Input text: {text}")
+        entities = extract_entities(text, tagger)
+        print("Extracted entities:")
+        if entities:
+            for entity in entities:
+                print(f"- {entity['text']} ({entity['entity_type']}) [confidence: {entity['score']:.3f}]")
+        else:
+            print("- No entities detected")
+        print()
+    
+    # Example of how this could be used to enhance embeddings
+    print("Example of enhancing a query for vector search:")
+    query = "How to implement BERT for sentiment analysis?"
+    print(f"Original query: {query}")
+    
+    entities = extract_entities(query, tagger)
+    enhanced_terms = [entity['text'] for entity in entities]
+    
+    print(f"Extracted entities: {enhanced_terms}")
+    print(f"Enhanced query could weight these terms more heavily in vector search")

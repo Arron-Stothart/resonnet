@@ -7,7 +7,6 @@ ReSonnet is a lightweight vector search that creates a searchable memory of all 
 ## Get Sarted
 1. **Export**: Export `conversations.json` from Claude.ai
     ![export](https://github.com/user-attachments/assets/e0ccd6d1-b3ff-4f3e-95db-a0f6be3b11ae)
-...
 
 ## Why is Searching Chat History Challenging?
 
@@ -19,11 +18,7 @@ ReSonnet is a lightweight vector search that creates a searchable memory of all 
 - Follow-up questions rely heavily on conversation context that are difficult to capture well in embeddings
 - To create an effective infinite-memory companion, retrieval must mirror human memory patterns (Recency, conceptual linking, ...)
 
-#### Agent-driven queries
-
-A major challenge for infintie-context agents is being able to retrieve context with more abstract relevance to the user message that semantic and keyword matching might miss.
-
-#### Building and effective Vector DB
+## Building and effective Vector DB
 
 The Vector DB is optimised for smaller scale and is run on-device. There is 1 DB per user. A typical claude.ai user might have 2500 conversations / 15000 messages.
 
@@ -56,6 +51,24 @@ To cover all of these, a hyrbid approach is preffered. This requires an inverted
 
 Embedding and Ranking models have to be small as they are again loaded and used on-device.
 
+#### Agent-driven queries
+
+A major challenge for infinite-context agents is being able to retrieve context with more abstract relevance to the user message that semantic and keyword matching might miss.
+
+[SeCom](https://arxiv.org/abs/2502.05589) Findings: Turn-level is too granular, session-level includes irrelevant content. Implement topical segmentation to create coherent memory chunks to make Claude feel like it truly "remembers" your relationshi rather than just searching isolated conversation fragments.
+
+#### `multilingual-e5-large-instruct` task descriptions:
+```
+All purpose:
+- "Represent this conversation segment for retrieving contextually relevant discussions about specific topics, decisions, or insights that would be valuable for future reference"
+For User Queries:
+- "Represent this user query for retrieving relevant past conversations focusing on the core intent and key concepts discussed"
+For Assistant Responses:
+- "Represent this response for retrieval focusing on actionable insights, solutions, and key information while ignoring conversational pleasantries"
+For Agent-Driven Queries:
+- "Represent this query for finding conceptually related conversations that may contain relevant context or solutions"
+```
+
 #### Asisstant Side Prompting / Expose memory retrieval as a callable function
 
 ## Areas to explore:
@@ -69,4 +82,3 @@ Embedding and Ranking models have to be small as they are again loaded and used 
 - Knowledge Graph of Conversations and Tiered Retrieval Strategy
 - [CogGRAG](https://arxiv.org/abs/2503.06567)
 - [Local Vector Database with RxDB and transformers.js in JavaScript](https://rxdb.info/articles/javascript-vector-database.html)
-

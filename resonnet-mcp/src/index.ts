@@ -13,13 +13,18 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import { importConversations } from "./tools/index.js";
+import { IMPORT_CONFIG, APP_CONFIG } from "./config.js";
+import { validateFileExists } from "./utils/index.js";
+import { ImportResponse } from "./types/index.js";
+
 /**
  * Create an MCP server with capabilities for tools only
  */
 const server = new Server(
   {
-    name: "resonnet-mcp",
-    version: "0.1.0",
+    name: APP_CONFIG.name,
+    version: APP_CONFIG.version,
   },
   {
     capabilities: {
@@ -66,7 +71,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             format: {
               type: "string",
               description: "Format of the export file (json, csv, etc)",
-              enum: ["json", "csv"]
+              enum: IMPORT_CONFIG.supportedFormats
             }
           },
           required: ["filePath"]
@@ -100,16 +105,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "import_conversations": {
       const filePath = String(request.params.arguments?.filePath);
-      const format = String(request.params.arguments?.format) || "json";
+      const format = String(request.params.arguments?.format) || IMPORT_CONFIG.defaultFormat;
       
       if (!filePath) {
         throw new Error("File path is required");
       }
+      
+      if (!validateFileExists(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
+      }
+
+      const result: ImportResponse = await importConversations(filePath, format);
 
       return {
         content: [{
           type: "text",
-          text: `Imported conversations from ${filePath} in ${format} format. (Implementation placeholder)`
+          text: `Imported ${result.successful} conversations from ${filePath}`
         }]
       };
     }

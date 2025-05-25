@@ -19,7 +19,24 @@ ReSonnet is a lightweight vector search that creates a searchable memory of all 
 - To create an effective infinite-memory companion, retrieval must mirror human memory patterns (Recency, conceptual linking, ...)
 - Injecting irrelevant context contaminates responses. Reasoning models are particularly prone to over-incorporating tangential context into the thought process.
 - Users create new chat sessions if they are not satisfied with the assistant's response meaning recency is not a good indicator of relevance. However if the assistant is to act as a human, recency bias is a good indicator of relevance.
-- Minimal signals for relevant context that would be useful for future reference. i.e. Users rarely thank the assistant.
+- Minimal signals for relevant context that would be useful for future reference.
+- Pasted context within user messages
+
+## Insights from Human Memory
+
+The words best RAG system is human memory. 
+
+- Emotionally charged events much more likely to be consolidated into long-term memory.
+- Increased likelihood to remember information that connects to existing knowledge (elaborative encoding).
+- Unexpected/surprising events reach conscious awareness thus are more likely to be remembered.
+- Surprise based episode boundaries (see EM-LLM).
+- Sleep mechanism that consolidates memories, works as an editorial review filtering what to remember.
+- Memory retrieval influenced by environmental context (not availanle to LLMs).
+- Group memory often exceeds individual memory through complementary retrieval cues. i.e. Reminiscant night talking on the porch.
+
+Human memory is flawed
+Allow LLM to form their own memories based on human processes - Worth experimenting with.
+
 
 ## Building and effective Vector DB
 
@@ -47,13 +64,6 @@ Refers to session where a detailed artefact report was generated.
     - `"Debug for AWS deployment error"` \
 This user wants to find the code block this was finally resolved in. The code block may be an incremental change with the entireity of the fix only known if combined with the original file. The correct assistant answer may not have any positive feedback: has the user closed the session because they've gotten what they needed, or have they given up?
 
-**SPLADE** wins if: The priority is fast, keyword-driven searches and if storage and speed are critical. It’s also better for short, term-specific queries common in chats.
-**Dense embeddings** win if: We want to search by meaning or intent or need to connect related ideas across a conversation. They’re ideal for usage by LLMs for this 'infinite context' effect. Also preffered for smaller data sets
-
-To cover all of these, a hyrbid approach is preffered. This requires an inverted index, a dense vector DB, and a fusion function for determining the most relevant results.
-
-Embedding and Ranking models have to be small as they are again loaded and used on-device.
-
 #### Agent-driven queries
 
 A major challenge for infinite-context agents is being able to retrieve context with more abstract relevance to the user message that semantic and keyword matching might miss.
@@ -68,6 +78,8 @@ A major challenge for infinite-context agents is being able to retrieve context 
 Topic segmentation lend to Concept Graphs over Raw Text embeddings.
 
 Adaptive Injection of Context to avoid contamination in prompts that dont need it.
+
+Vannevar Bush (from "As We May Think," 1945): "The human operates by association. With one item in its grasp, it snaps instantly to the next that is suggested by the association of thoughts, in accordance with some intricate web of trails carried by the cells of the brain."
 
 Forget Mechanism
 
@@ -96,3 +108,8 @@ For Agent-Driven Queries:
 - Knowledge Graph of Conversations and Tiered Retrieval Strategy
 - [CogGRAG](https://arxiv.org/abs/2503.06567)
 - [Local Vector Database with RxDB and transformers.js in JavaScript](https://rxdb.info/articles/javascript-vector-database.html)
+
+<blockquote>
+  <p><i>“The art of remembering is the art of thinking."</i></p>
+  <footer><i><b>— <cite>William James</cite>, <time datetime="1892">1892</time></b><i></footer>
+</blockquote>

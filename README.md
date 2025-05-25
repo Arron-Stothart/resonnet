@@ -17,6 +17,7 @@ ReSonnet is a lightweight vector search that creates a searchable memory of all 
 - Assistant messages tend to be 50x longer than user messages
 - Follow-up questions rely heavily on conversation context that are difficult to capture well in embeddings
 - To create an effective infinite-memory companion, retrieval must mirror human memory patterns (Recency, conceptual linking, ...)
+- Injecting irrelevant context contaminates responses. Reasoning models are particularly prone to over-incorporating tangential context into the thought process.
 
 ## Building and effective Vector DB
 
@@ -54,6 +55,11 @@ Embedding and Ranking models have to be small as they are again loaded and used 
 #### Agent-driven queries
 
 A major challenge for infinite-context agents is being able to retrieve context with more abstract relevance to the user message that semantic and keyword matching might miss.
+
+#### Memory in ChatGPT
+
+- Reference Saved Memories: ChatGPT detects and stores useful information for future conversations. This is injected into the context everytime a new non-temporary chat is started. <br/> `Model Set Context:[2025-05-02]. The user dislikes HR style language in generated text.`
+- Reference Chat History: RAG over chat history. Currently, this injects a lot of tokens and can contaminate responses.
 
 [SeCom](https://arxiv.org/abs/2502.05589) Findings: Turn-level is too granular, session-level includes irrelevant content. Implement topical segmentation to create coherent memory chunks to make Claude feel like it truly "remembers" your relationshi rather than just searching isolated conversation fragments.
 

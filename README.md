@@ -18,6 +18,8 @@ ReSonnet is a lightweight vector search that creates a searchable memory of all 
 - Follow-up questions rely heavily on conversation context that are difficult to capture well in embeddings
 - To create an effective infinite-memory companion, retrieval must mirror human memory patterns (Recency, conceptual linking, ...)
 - Injecting irrelevant context contaminates responses. Reasoning models are particularly prone to over-incorporating tangential context into the thought process.
+- Users create new chat sessions if they are not satisfied with the assistant's response meaning recency is not a good indicator of relevance. However if the assistant is to act as a human, recency bias is a good indicator of relevance.
+- Minimal signals for relevant context that would be useful for future reference. i.e. Users rarely thank the assistant.
 
 ## Building and effective Vector DB
 
@@ -62,6 +64,12 @@ A major challenge for infinite-context agents is being able to retrieve context 
 - Reference Chat History: RAG over chat history. Currently, this injects a lot of tokens and can contaminate responses.
 
 [SeCom](https://arxiv.org/abs/2502.05589) Findings: Turn-level is too granular, session-level includes irrelevant content. Implement topical segmentation to create coherent memory chunks to make Claude feel like it truly "remembers" your relationshi rather than just searching isolated conversation fragments.
+
+Topic segmentation lend to Concept Graphs over Raw Text embeddings.
+
+Adaptive Injection of Context to avoid contamination in prompts that dont need it.
+
+Forget Mechanism
 
 #### `multilingual-e5-large-instruct` task descriptions:
 ```

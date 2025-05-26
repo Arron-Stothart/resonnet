@@ -75,10 +75,6 @@ This user wants to find the code block this was finally resolved in. The code bl
 *Reference Saved Memories:* ChatGPT detects and stores useful information for future conversations. This is injected into the context everytime a new non-temporary chat is started. <br/> `Model Set Context:[2025-05-02]. The user dislikes HR style language in generated text.`
 *Reference Chat History:* RAG over chat history. Currently, this injects a lot of tokens and can contaminate responses.
 
-[SeCom](https://arxiv.org/abs/2502.05589) Findings: Turn-level is too granular, session-level includes irrelevant content. Implement topical segmentation to create coherent memory chunks to make Claude feel like it truly "remembers" your relationshi rather than just searching isolated conversation fragments.
-
-Vannevar Bush (from "As We May Think," 1945): "The human operates by association. With one item in its grasp, it snaps instantly to the next that is suggested by the association of thoughts, in accordance with some intricate web of trails carried by the cells of the brain."
-
 ## Memory in Claude Code
 
 Claude Code recreates how senior engineers work with codebases. They don't read isolated snippets - they keyword search, explore entire files, and reason contextually. Reffered to as agentic discovery by Claude Code lead engineer Boris Cherny.

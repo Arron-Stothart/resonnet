@@ -24,6 +24,9 @@ ChatGPT recently added RDKit support. Ideally, we would enable the LLM to levera
   - Scientific/Molecular Visualisation
   - Three.js
   - Auto-notebook (Educational notebooks with executable code)
+  - Google Streetview
+
+Artifact library / gallery page
 
 ## Reading List
 

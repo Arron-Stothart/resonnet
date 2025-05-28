@@ -17,6 +17,13 @@ ChatGPT recently added RDKit support. Ideally, we would enable the LLM to levera
 
 ![ChatGPT RDKit](https://github.com/user-attachments/assets/bfe5128a-ef2a-4113-8965-68e209c7f4aa)
 
+#### System Prompt Guidance
+- All artifacts render directly within the conversation flow, not in separate windows
+- Example artifact types
+  - Interactive simulations with parameter controls
+  - Scientific/Molecular Visualisation
+  - Three.js
+  - Auto-notebook (Educational notebooks with executable code)
 
 ## Reading List
 
